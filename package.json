@@ -1,0 +1,17 @@
+{
+  "name": "crema-ai-espresso-app",
+  "version": "1.0.0",
+  "description": "Mobile-optimierte Web-Anwendung zur Erfassung und KI-gestützten Optimierung von Espresso-Bezügen mit Express, SQLite und Gemini API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test tests/api.test.js"
+  },
+  "dependencies": {
+    "@google/genai": "^1.0.0",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "multer": "^2.0.0"
+  }
+}

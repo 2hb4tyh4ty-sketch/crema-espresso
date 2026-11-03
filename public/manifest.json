@@ -1,0 +1,19 @@
+{
+  "name": "Crema – Espresso & KI-Barista",
+  "short_name": "Crema",
+  "description": "Minimalistische Espresso-Erfassung und KI-Barista (24/7 GitHub Web-App)",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b0b0e",
+  "theme_color": "#0b0b0e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

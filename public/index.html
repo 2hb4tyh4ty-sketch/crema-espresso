@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0b0e" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Crema · Espresso &amp; KI-Barista</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./icon.svg" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Ruhige Kopfzeile -->
+    <header class="app-header">
+      <div>
+        <span class="app-logo">Crema</span>
+        <span class="header-sub" id="header-setup-line">Bezzera Luce S PID · DF54</span>
+      </div>
+      <button type="button" class="status-chip" id="btn-go-setup">
+        <span class="dot" id="ai-status-dot"></span>
+        <span id="ai-status-label">KI einrichten</span>
+      </button>
+    </header>
+
+    <main class="app-main">
+      <!-- ========================================================= -->
+      <!-- TAB 1: BEZUG (Klarer 1 -> 2 -> 3 Ablauf)                  -->
+      <!-- ========================================================= -->
+      <section class="view active" id="panel-shot">
+
+        <!-- KI-Barista Antwort erscheint prominent oben, sobald ausgewertet -->
+        <div class="card ai-card hidden" id="ai-barista-result-card">
+          <div class="ai-card-top">
+            <span class="ai-label">KI-Barista · Nächster Bezug</span>
+            <span class="ai-state" id="ai-extraction-state"></span>
+          </div>
+          <p class="ai-command" id="ai-command-text">—</p>
+          <p class="ai-reason" id="ai-diagnosis-text"></p>
+          <div class="ai-card-footer" id="ai-suggested-strip">
+            <span class="mono muted-sm" id="ai-suggested-metrics"></span>
+            <button type="button" class="btn-secondary-sm" id="btn-apply-ai-suggestion">
+              Werte übernehmen
+            </button>
+          </div>
+        </div>
+
+        <!-- SCHRITT 1: BOHNE -->
+        <div class="step-group">
+          <div class="step-header">
+            <span class="step-title">1. Kaffeebohne</span>
+            <button type="button" class="link-action" id="btn-quick-add-bean">+ Neue Bohne</button>
+          </div>
+
+          <div class="card card-tight">
+            <!-- Hinweis falls noch gar keine Bohne existiert -->
+            <div id="no-beans-hint" class="empty-inline hidden">
+              <span>Noch keine Bohne eingetragen.</span>
+              <button type="button" class="btn-secondary-sm" id="btn-first-bean">Jetzt anlegen →</button>
+            </div>
+
+            <div id="bean-select-wrap">
+              <select id="shot-bean-select" class="select-clean" aria-label="Bohne auswählen">
+                <option value="">Ohne feste Bohne</option>
+              </select>
+            </div>
+
+            <!-- Gespeichertes perfektes Referenzrezept dieser Bohne -->
+            <div id="shot-reference-banner" class="ref-bar hidden">
+              <div>
+                <span class="ref-badge">★ Referenzrezept</span>
+                <span id="shot-reference-summary" class="mono ref-numbers"></span>
+              </div>
+              <button type="button" class="link-action" id="btn-apply-reference">Laden</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- SCHRITT 2: PARAMETER (Übersichtliche Zeilen untereinander, 18g Sieb) -->
+        <form id="shot-form" novalidate>
+          <div class="step-group">
+            <div class="step-header">
+              <span class="step-title">2. Einstellung &amp; Bezug</span>
+              <span class="step-meta" id="shot-prefill-badge">Vom letzten Bezug</span>
+            </div>
+
+            <div class="card list-rows">
+              <!-- Dosis In (18g Sieb) -->
+              <div class="param-row">
+                <div class="param-info">
+                  <label class="param-name" for="shot-in">Dosis (In)</label>
+                  <span class="param-sub">
+                    18g Sieb
+                    <button type="button" class="chip-18g" id="btn-reset-18g" title="Auf 18.0g setzen">18g setzen</button>
+                  </span>
+                </div>
+                <div class="stepper">
+                  <button type="button" class="step-btn" data-step-target="shot-in" data-step="-0.1" aria-label="Weniger">−</button>
+                  <div class="val-unit">
+                    <input type="number" id="shot-in" class="val-input mono" step="0.1" min="5" max="30" inputmode="decimal" required />
+                    <span>g</span>
+                  </div>
+                  <button type="button" class="step-btn" data-step-target="shot-in" data-step="0.1" aria-label="Mehr">+</button>
+                </div>
+              </div>
+
+              <!-- Menge Out -->
+              <div class="param-row">
+                <div class="param-info">
+                  <label class="param-name" for="shot-out">Ergebnis (Out)</label>
+                  <span class="param-sub">
+                    Verhältnis <strong class="mono" id="live-ratio-text">1:2.0</strong>
+                    <button type="button" class="chip-18g" id="btn-calc-1to2" title="Auf 1:2 Verhältnis setzen">1:2</button>
+                  </span>
+                </div>
+                <div class="stepper">
+                  <button type="button" class="step-btn" data-step-target="shot-out" data-step="-0.5" aria-label="Weniger">−</button>
+                  <div class="val-unit">
+                    <input type="number" id="shot-out" class="val-input mono" step="0.5" min="5" max="120" inputmode="decimal" required />
+                    <span>g</span>
+                  </div>
+                  <button type="button" class="step-btn" data-step-target="shot-out" data-step="0.5" aria-label="Mehr">+</button>
+                </div>
+              </div>
+
+              <!-- Zeit + Stoppuhr -->
+              <div class="param-row">
+                <div class="param-info">
+                  <label class="param-name" for="shot-time">Bezugszeit</label>
+                  <span class="param-sub">
+                    <button type="button" class="timer-inline-btn" id="btn-shot-timer">
+                      <span class="timer-dot"></span>
+                      <span id="shot-timer-label">Stoppuhr starten</span>
+                    </button>
+                  </span>
+                </div>
+                <div class="stepper">
+                  <button type="button" class="step-btn" data-step-target="shot-time" data-step="-1" aria-label="Kürzer">−</button>
+                  <div class="val-unit">
+                    <input type="number" id="shot-time" class="val-input mono" step="0.5" min="1" max="120" inputmode="decimal" required />
+                    <span>s</span>
+                  </div>
+                  <button type="button" class="step-btn" data-step-target="shot-time" data-step="1" aria-label="Länger">+</button>
+                </div>
+              </div>
+
+              <!-- Temperatur -->
+              <div class="param-row">
+                <div class="param-info">
+                  <label class="param-name" for="shot-temp">Temperatur</label>
+                  <span class="param-sub">PID Steuerung</span>
+                </div>
+                <div class="stepper">
+                  <button type="button" class="step-btn" data-step-target="shot-temp" data-step="-0.5" aria-label="Kühler">−</button>
+                  <div class="val-unit">
+                    <input type="number" id="shot-temp" class="val-input mono" step="0.5" min="80" max="102" inputmode="decimal" required />
+                    <span>°C</span>
+                  </div>
+                  <button type="button" class="step-btn" data-step-target="shot-temp" data-step="0.5" aria-label="Heißer">+</button>
+                </div>
+              </div>
+
+              <!-- Mahlgrad -->
+              <div class="param-row">
+                <div class="param-info">
+                  <label class="param-name" for="shot-grind">Mahlgrad</label>
+                  <span class="param-sub" id="grind-grinder-hint">DF54</span>
+                </div>
+                <div class="stepper">
+                  <button type="button" class="step-btn" data-grind-step="-0.5" aria-label="Feiner">−</button>
+                  <div class="val-unit">
+                    <input type="text" id="shot-grind" class="val-input mono" inputmode="decimal" placeholder="15" required />
+                  </div>
+                  <button type="button" class="step-btn" data-grind-step="0.5" aria-label="Gröber">+</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SCHRITT 3: GESCHMACK & AUSWERTUNG -->
+          <div class="step-group">
+            <div class="step-header">
+              <span class="step-title">3. Wie hat er geschmeckt?</span>
+            </div>
+
+            <div class="card taste-card">
+              <!-- Stufenloser Regler: Sauer - Neutral - Bitter -->
+              <div class="taste-block">
+                <div class="row-split">
+                  <label class="taste-title" for="shot-taste-slider">Geschmacksrichtung</label>
+                  <span class="taste-status" id="taste-readout-pill">Neutral</span>
+                </div>
+                <div class="slider-box">
+                  <span class="slider-mid-line" aria-hidden="true"></span>
+                  <input
+                    type="range"
+                    id="shot-taste-slider"
+                    class="taste-slider"
+                    min="-1"
+                    max="1"
+                    step="0.01"
+                    value="0"
+                  />
+                </div>
+                <div class="slider-captions">
+                  <button type="button" class="caption-btn" data-slider-set="-0.6">Sauer</button>
+                  <button type="button" class="caption-btn" data-slider-set="0">Neutral (Mitte)</button>
+                  <button type="button" class="caption-btn" data-slider-set="0.6">Bitter</button>
+                </div>
+              </div>
+
+              <!-- 1 bis 5 Sterne -->
+              <div class="stars-block">
+                <span class="taste-title">Gesamteindruck</span>
+                <div class="stars-picker" id="shot-stars-group" role="radiogroup" aria-label="1 bis 5 Sterne">
+                  <button type="button" class="star-btn" data-star="1" aria-label="1 Stern">★</button>
+                  <button type="button" class="star-btn" data-star="2" aria-label="2 Sterne">★</button>
+                  <button type="button" class="star-btn" data-star="3" aria-label="3 Sterne">★</button>
+                  <button type="button" class="star-btn" data-star="4" aria-label="4 Sterne">★</button>
+                  <button type="button" class="star-btn" data-star="5" aria-label="5 Sterne">★</button>
+                </div>
+              </div>
+
+              <!-- Klare Buttons -->
+              <div class="submit-stack">
+                <button type="submit" class="btn-primary" id="btn-save-and-analyze">
+                  Speichern &amp; KI-Barista fragen
+                </button>
+
+                <button
+                  type="button"
+                  class="btn-ref"
+                  id="btn-save-reference-recipe"
+                  disabled
+                >
+                  ★ Rezept speichern (ab 5★ &amp; Neutral)
+                </button>
+
+                <button type="button" class="subtle-save-link" id="btn-save-shot-only">
+                  Nur ohne KI-Analyse speichern
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
+
+        <!-- Aufklappbarer Verlauf -->
+        <details class="history-box">
+          <summary>
+            <span>Bisherige Bezüge</span>
+            <span class="mono muted-sm" id="shots-count-label">0</span>
+          </summary>
+          <div id="shots-history-list" class="history-list"></div>
+        </details>
+      </section>
+
+      <!-- ========================================================= -->
+      <!-- TAB 2: BOHNEN & PRÄFERENZ-KALIBRIERUNG                    -->
+      <!-- ========================================================= -->
+      <section class="view" id="panel-beans">
+        <!-- Verständliche Kalibrierungs-Anzeige (< 3 Bewertungen => "Kalibrierung läuft...") -->
+        <div class="card calib-box">
+          <div class="row-split">
+            <div class="calib-status-wrap">
+              <span class="dot" id="calib-dot"></span>
+              <strong id="calib-status-text">Kalibrierung läuft...</strong>
+            </div>
+            <span class="mono muted-sm" id="calib-counter-badge">0 / 3</span>
+          </div>
+          <p class="calib-sub" id="calib-desc">
+            Bewerte 3 Bohnen von 1–10, damit die KI deine Vorlieben lernt.
+          </p>
+          <div class="progress-bar">
+            <div class="progress-fill" id="calib-progress-fill" style="width: 0%"></div>
+          </div>
+          <div id="calib-learned-tags" class="tags-row hidden"></div>
+        </div>
+
+        <!-- Zwei eindeutige Buttons zum Hinzufügen -->
+        <div class="two-buttons">
+          <label class="btn-primary" for="bean-camera-input">
+            📷 Etikett fotografieren
+            <input type="file" id="bean-camera-input" accept="image/*" hidden />
+          </label>
+          <button type="button" class="btn-secondary" id="btn-toggle-bean-form">
+            + Manuell eintragen
+          </button>
+        </div>
+
+        <!-- Aufgeräumtes Bohnen-Formular -->
+        <form id="bean-form-card" class="card form-stack hidden" novalidate>
+          <div class="row-split">
+            <h2 class="card-heading" id="bean-form-title">Neue Kaffeebohne</h2>
+            <button type="button" class="link-action" id="btn-close-bean-form">Abbrechen</button>
+          </div>
+
+          <input type="hidden" id="bean-edit-id" value="" />
+
+          <!-- Foto-Scan Status -->
+          <div id="scan-preview-box" class="scan-banner hidden">
+            <img id="scan-preview-img" alt="Etikett" />
+            <div class="scan-banner-text">
+              <strong id="scan-status-title">Foto geladen</strong>
+              <span id="scan-status-msg">Wird ausgelesen…</span>
+            </div>
+            <button type="button" class="btn-secondary-sm" id="btn-rescan-image">Neu lesen</button>
+          </div>
+
+          <div class="field-pair">
+            <div class="input-block">
+              <label for="bean-roaster">Röster</label>
+              <input type="text" id="bean-roaster" class="text-input" placeholder="z. B. 19grams" />
+            </div>
+            <div class="input-block">
+              <label for="bean-name">Name der Bohne *</label>
+              <input type="text" id="bean-name" class="text-input" placeholder="z. B. Wild at Heart" required />
+            </div>
+          </div>
+
+          <div class="field-pair">
+            <div class="input-block">
+              <label for="bean-roast-date">Röstdatum (anpassbar)</label>
+              <input type="date" id="bean-roast-date" class="text-input" />
+            </div>
+            <div class="input-block">
+              <label for="bean-expiry-date">Ablaufdatum (MHD)</label>
+              <input type="date" id="bean-expiry-date" class="text-input" />
+            </div>
+          </div>
+
+          <div class="input-block">
+            <label for="bean-flavor-notes">Geschmacksnoten</label>
+            <input type="text" id="bean-flavor-notes" class="text-input" placeholder="z. B. Schokoladig, Nussig, Karamell" />
+            <div class="tags-row">
+              <button type="button" class="chip-tag" data-flavor="Schokoladig">+ Schokoladig</button>
+              <button type="button" class="chip-tag" data-flavor="Nussig">+ Nussig</button>
+              <button type="button" class="chip-tag" data-flavor="Karamell">+ Karamell</button>
+              <button type="button" class="chip-tag" data-flavor="Fruchtig">+ Fruchtig</button>
+              <button type="button" class="chip-tag" data-flavor="Beerig">+ Beerig</button>
+            </div>
+          </div>
+
+          <div class="input-block">
+            <div class="row-split">
+              <label for="bean-ai-tips">Grundrezept &amp; Tipps (18g Sieb)</label>
+              <button type="button" class="link-action" id="btn-generate-bean-recipe">
+                ✨ Per KI vorschlagen
+              </button>
+            </div>
+            <textarea
+              id="bean-ai-tips"
+              class="text-input text-area"
+              rows="4"
+              placeholder="Empfohlene Startwerte &amp; Tipps (wird auf Wunsch von Gemini erstellt)…"
+            ></textarea>
+          </div>
+
+          <div class="input-block" id="bean-initial-rating-wrap">
+            <div class="row-split">
+              <label>Deine Bewertung (1–10)</label>
+              <span class="mono muted-sm" id="bean-form-rating-display">Optional</span>
+            </div>
+            <div class="scale-10" id="bean-form-rating-grid"></div>
+          </div>
+
+          <button type="submit" class="btn-primary" id="btn-submit-bean">Bohne speichern</button>
+        </form>
+
+        <!-- Gespeicherte Bohnen -->
+        <div id="beans-list" class="cards-stack"></div>
+      </section>
+
+      <!-- ========================================================= -->
+      <!-- TAB 3: SETUP (KI-Key + Geräte klar an einem Ort)          -->
+      <!-- ========================================================= -->
+      <section class="view" id="panel-equipment">
+        <!-- 1. Gemini 3.8 Flash KI direkt sichtbar ohne verstecktes Popup -->
+        <div class="step-group">
+          <div class="step-header">
+            <span class="step-title">KI-Verbindung (Gemini 3.8 Flash)</span>
+          </div>
+          <div class="card form-stack">
+            <p class="muted-sm" id="setup-ai-status-text">
+              Für Etiketten-Fotos, Grundrezepte und den KI-Barista wird ein kostenloser Schlüssel aus dem
+              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a> benötigt.
+            </p>
+            <div class="input-block">
+              <label for="input-gemini-key">Gemini API-Key</label>
+              <input
+                type="password"
+                id="input-gemini-key"
+                class="text-input mono"
+                placeholder="AIzaSy… hier einfügen"
+                autocomplete="off"
+              />
+              <span class="muted-sm" id="modal-key-current-status"></span>
+            </div>
+            <div class="input-block">
+              <label for="input-gemini-model">KI-Modell</label>
+              <select id="input-gemini-model" class="text-input">
+                <option value="gemini-3.8-flash">Gemini 3.8 Flash (Aktuell · Empfohlen)</option>
+                <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+              </select>
+            </div>
+            <div class="two-buttons">
+              <button type="button" class="btn-secondary" id="btn-test-ai-key">Verbindung testen</button>
+              <button type="button" class="btn-primary" id="btn-save-ai-key">Key speichern</button>
+            </div>
+            <div id="mobile-link-box" class="ref-bar hidden">
+              <span class="muted-sm">24/7 GitHub-App inkl. deinem Key fürs Handy:</span>
+              <button type="button" class="link-action" id="btn-copy-mobile-link">Link kopieren</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Geräteverwaltung -->
+        <div class="step-group">
+          <div class="step-header">
+            <span class="step-title">Deine Geräte</span>
+            <button type="button" class="link-action" id="btn-toggle-equip-form">+ Weiteres Gerät</button>
+          </div>
+
+          <form id="equipment-form" class="card form-stack hidden" novalidate>
+            <input type="hidden" id="equip-edit-id" value="" />
+            <div class="field-pair">
+              <div class="input-block">
+                <label for="equip-type">Gerätetyp</label>
+                <select id="equip-type" class="text-input">
+                  <option value="machine">Espressomaschine</option>
+                  <option value="grinder">Kaffeemühle</option>
+                </select>
+              </div>
+              <div class="input-block">
+                <label for="equip-name">Modellname *</label>
+                <input type="text" id="equip-name" class="text-input" placeholder="z. B. Bezzera Luce S PID" required />
+              </div>
+            </div>
+            <div class="input-block">
+              <label for="equip-notes">Notiz (optional)</label>
+              <input type="text" id="equip-notes" class="text-input" placeholder="z. B. 18g Sieb, PID" />
+            </div>
+            <label class="checkbox-line">
+              <input type="checkbox" id="equip-default" checked />
+              <span>Als aktives Standardgerät verwenden</span>
+            </label>
+            <div class="two-buttons">
+              <button type="button" class="btn-secondary" id="btn-cancel-equip">Abbrechen</button>
+              <button type="submit" class="btn-primary">Speichern</button>
+            </div>
+          </form>
+
+          <div class="card list-rows" id="equipment-combined-list"></div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Klare untere Navigation -->
+    <nav class="tab-bar" aria-label="Hauptmenü">
+      <button type="button" class="tab-btn active" data-tab="shot">
+        <span class="tab-label">Bezug</span>
+      </button>
+      <button type="button" class="tab-btn" data-tab="beans">
+        <span class="tab-label">Bohnen</span>
+        <span class="tab-dot hidden" id="nav-beans-calib-dot"></span>
+      </button>
+      <button type="button" class="tab-btn" data-tab="equipment">
+        <span class="tab-label">Setup</span>
+      </button>
+    </nav>
+  </div>
+
+  <div id="toast-container" class="toast-stack" aria-live="polite"></div>
+
+  <script src="./standalone-engine.js" defer></script>
+  <script src="./app.js" defer></script>
+</body>
+</html>
