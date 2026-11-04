@@ -1,12 +1,13 @@
+/* Crema – mobile-first, groß & gut lesbar (Basis 17px, Touch-Ziele >= 44px) */
 :root {
   --bg: #0b0b0e;
   --card: #141418;
   --control: #1d1d23;
-  --line: rgba(255, 255, 255, 0.07);
+  --line: rgba(255, 255, 255, 0.08);
 
   --text: #f5f5f7;
-  --muted: #9898a2;
-  --dim: #666670;
+  --muted: #a1a1aa;
+  --dim: #7a7a84;
 
   --accent: #e5933a;
   --accent-bg: rgba(229, 147, 58, 0.14);
@@ -14,15 +15,20 @@
   --yellow: #fbbf24;
   --red: #f87171;
 
-  --radius: 16px;
-  --radius-sm: 11px;
-  --tabbar-h: 60px;
+  --radius: 18px;
+  --radius-sm: 13px;
+  --tabbar-h: 72px;
 }
 
 *,
 *::before,
 *::after {
   box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 html,
@@ -32,7 +38,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
@@ -53,13 +59,13 @@ a {
 }
 
 .muted-sm {
-  font-size: 0.78rem;
+  font-size: 0.86rem;
   color: var(--muted);
   margin: 0;
 }
 
 .app-shell {
-  max-width: 480px;
+  max-width: 520px;
   margin: 0 auto;
   min-height: 100dvh;
   display: flex;
@@ -75,22 +81,22 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: calc(14px + env(safe-area-inset-top, 0px)) 18px 13px;
-  background: rgba(11, 11, 14, 0.9);
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 18px 14px;
+  background: rgba(11, 11, 14, 0.92);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--line);
 }
 
 .app-logo {
   display: block;
-  font-size: 1.05rem;
+  font-size: 1.2rem;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 
 .header-sub {
   display: block;
-  font-size: 0.75rem;
+  font-size: 0.84rem;
   color: var(--muted);
   margin-top: 1px;
 }
@@ -98,20 +104,22 @@ a {
 .status-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  min-height: 40px;
   background: var(--card);
   border: 1px solid var(--line);
   color: var(--muted);
-  padding: 6px 11px;
+  padding: 8px 14px;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-family: inherit;
+  font-size: 0.86rem;
   font-weight: 500;
   cursor: pointer;
 }
 
 .dot {
-  width: 7px;
-  height: 7px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: var(--yellow);
   flex-shrink: 0;
@@ -124,51 +132,52 @@ a {
 /* Main Content */
 .app-main {
   flex: 1;
-  padding: 18px 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 28px);
+  padding: 20px 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 32px);
 }
 
 .view {
   display: none;
   flex-direction: column;
-  gap: 22px;
+  gap: 26px;
 }
 
 .view.active {
   display: flex;
 }
 
-/* Numbered Step Sections */
+/* Nummerierte Schritte */
 .step-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .step-header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  gap: 10px;
   padding: 0 4px;
 }
 
 .step-title {
-  font-size: 0.82rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: var(--muted);
 }
 
 .step-meta {
-  font-size: 0.74rem;
+  font-size: 0.82rem;
   color: var(--dim);
 }
 
 .link-action {
   background: none;
   border: none;
-  padding: 0;
+  padding: 8px 0;
   color: var(--accent);
   font-family: inherit;
-  font-size: 0.8rem;
+  font-size: 0.94rem;
   font-weight: 600;
   cursor: pointer;
 }
@@ -178,16 +187,16 @@ a {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 18px;
 }
 
 .card-tight {
-  padding: 12px 14px;
+  padding: 14px 16px;
 }
 
 .card-heading {
   margin: 0;
-  font-size: 0.98rem;
+  font-size: 1.1rem;
   font-weight: 600;
 }
 
@@ -198,29 +207,30 @@ a {
   gap: 10px;
 }
 
-/* Step 1: Bean Select */
+/* Schritt 1: Bohne */
 .empty-inline {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  font-size: 0.84rem;
+  font-size: 0.95rem;
   color: var(--muted);
-  padding-bottom: 10px;
-  margin-bottom: 10px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
   border-bottom: 1px solid var(--line);
 }
 
+/* Inputs: mind. 16px Schrift, sonst zoomt iOS beim Antippen hinein */
 .select-clean {
   width: 100%;
-  min-height: 42px;
+  min-height: 52px;
   background: var(--control);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   color: var(--text);
-  padding: 8px 12px;
+  padding: 10px 14px;
   font-family: inherit;
-  font-size: 0.92rem;
+  font-size: 1rem;
   font-weight: 500;
 }
 
@@ -234,11 +244,11 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-top: 10px;
-  padding-top: 10px;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
   border-top: 1px solid var(--line);
-  font-size: 0.78rem;
+  font-size: 0.88rem;
 }
 
 .ref-badge {
@@ -251,9 +261,9 @@ a {
   color: var(--muted);
 }
 
-/* Step 2: Clean iOS-Style Horizontal Parameter Rows */
+/* Schritt 2: Parameter-Zeilen */
 .list-rows {
-  padding: 0 14px;
+  padding: 0 16px;
 }
 
 .param-row {
@@ -261,7 +271,7 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 13px 0;
+  padding: 16px 0;
   border-bottom: 1px solid var(--line);
 }
 
@@ -272,22 +282,22 @@ a {
 .param-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 }
 
 .param-name {
-  font-size: 0.94rem;
+  font-size: 1.02rem;
   font-weight: 600;
   color: var(--text);
 }
 
 .param-sub {
-  font-size: 0.75rem;
+  font-size: 0.84rem;
   color: var(--dim);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -300,9 +310,10 @@ a {
   background: var(--control);
   border: 1px solid var(--line);
   color: var(--muted);
-  padding: 1px 7px;
-  border-radius: 6px;
-  font-size: 0.7rem;
+  padding: 6px 11px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.82rem;
   cursor: pointer;
 }
 
@@ -314,13 +325,13 @@ a {
 .timer-inline-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 7px;
   background: none;
   border: none;
-  padding: 0;
+  padding: 6px 0;
   color: var(--accent);
   font-family: inherit;
-  font-size: 0.76rem;
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
 }
@@ -330,59 +341,60 @@ a {
 }
 
 .timer-dot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: currentColor;
 }
 
-/* Right-Side Stepper Control */
+/* Stepper rechts */
 .stepper {
   display: flex;
   align-items: center;
   background: var(--control);
   border-radius: var(--radius-sm);
-  padding: 3px;
+  padding: 4px;
   flex-shrink: 0;
 }
 
 .step-btn {
-  width: 38px;
-  height: 38px;
+  width: 46px;
+  height: 46px;
   border: none;
   background: transparent;
   color: var(--text);
-  font-size: 1.2rem;
-  border-radius: 8px;
+  font-size: 1.5rem;
+  line-height: 1;
+  border-radius: 10px;
   cursor: pointer;
 }
 
 .step-btn:active {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .val-unit {
   display: flex;
   align-items: baseline;
   justify-content: center;
-  min-width: 72px;
-  padding: 0 4px;
+  min-width: 78px;
+  padding: 0 2px;
 }
 
 .val-input {
-  width: 52px;
+  width: 58px;
   border: none;
   background: transparent;
   color: var(--text);
   text-align: right;
-  font-size: 1.05rem;
+  font-size: 1.3rem;
   font-weight: 600;
   padding: 0;
   -moz-appearance: textfield;
 }
 
 #shot-grind.val-input {
-  width: 64px;
+  width: 72px;
   text-align: center;
 }
 
@@ -397,26 +409,26 @@ a {
 }
 
 .val-unit span {
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   color: var(--muted);
   margin-left: 3px;
 }
 
-/* Step 3: Taste & Stars */
+/* Schritt 3: Geschmack & Sterne */
 .taste-card {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 20px;
 }
 
 .taste-title {
-  font-size: 0.88rem;
+  font-size: 1.02rem;
   font-weight: 500;
   color: var(--text);
 }
 
 .taste-status {
-  font-size: 0.78rem;
+  font-size: 0.92rem;
   font-weight: 600;
   color: var(--green);
 }
@@ -431,16 +443,16 @@ a {
 
 .slider-box {
   position: relative;
-  padding: 12px 0 6px;
+  padding: 18px 0 10px;
 }
 
 .slider-mid-line {
   position: absolute;
   left: 50%;
-  top: 7px;
+  top: 12px;
   width: 2px;
-  height: 14px;
-  background: rgba(255, 255, 255, 0.3);
+  height: 22px;
+  background: rgba(255, 255, 255, 0.35);
   transform: translateX(-50%);
   pointer-events: none;
 }
@@ -449,7 +461,7 @@ a {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 6px;
+  height: 10px;
   border-radius: 999px;
   background: linear-gradient(90deg, #eab308 0%, #34d399 50%, #ea580c 100%);
   outline: none;
@@ -458,21 +470,21 @@ a {
 .taste-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 24px;
-  height: 24px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   background: #ffffff;
-  border: 3px solid var(--bg);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  border: 4px solid var(--bg);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
   cursor: pointer;
 }
 
 .taste-slider::-moz-range-thumb {
-  width: 24px;
-  height: 24px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   background: #ffffff;
-  border: 3px solid var(--bg);
+  border: 4px solid var(--bg);
   cursor: pointer;
 }
 
@@ -484,33 +496,34 @@ a {
 .caption-btn {
   background: none;
   border: none;
-  padding: 2px 0;
+  padding: 8px 2px;
   font-family: inherit;
-  font-size: 0.75rem;
-  color: var(--dim);
+  font-size: 0.9rem;
+  color: var(--muted);
   cursor: pointer;
 }
 
 .stars-block {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-top: 14px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding-top: 16px;
   border-top: 1px solid var(--line);
 }
 
 .stars-picker {
   display: flex;
-  gap: 6px;
+  justify-content: space-between;
 }
 
 .star-btn {
   background: none;
   border: none;
-  padding: 4px;
-  font-size: 1.6rem;
+  padding: 6px 8px;
+  font-size: 2.3rem;
   line-height: 1;
-  color: #2c2c35;
+  color: #34343e;
   cursor: pointer;
 }
 
@@ -518,28 +531,30 @@ a {
   color: var(--accent);
 }
 
-/* Submit Area */
+/* Buttons */
 .submit-stack {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   padding-top: 4px;
 }
 
 .btn-primary {
   width: 100%;
-  min-height: 48px;
+  min-height: 56px;
   border: none;
   border-radius: var(--radius-sm);
   background: var(--accent);
   color: #0b0b0e;
   font-family: inherit;
-  font-size: 0.94rem;
+  font-size: 1.05rem;
   font-weight: 600;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  text-align: center;
+  padding: 0 14px;
 }
 
 .btn-primary:disabled {
@@ -549,25 +564,27 @@ a {
 
 .btn-secondary {
   width: 100%;
-  min-height: 48px;
+  min-height: 56px;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   color: var(--text);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: 1rem;
   font-weight: 500;
   cursor: pointer;
+  padding: 0 14px;
 }
 
 .btn-secondary-sm {
+  min-height: 44px;
   background: var(--control);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
   color: var(--text);
-  padding: 6px 12px;
+  padding: 10px 15px;
   font-family: inherit;
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
@@ -575,15 +592,16 @@ a {
 
 .btn-ref {
   width: 100%;
-  min-height: 44px;
+  min-height: 52px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
   background: transparent;
   color: var(--dim);
   font-family: inherit;
-  font-size: 0.84rem;
+  font-size: 0.96rem;
   font-weight: 500;
   cursor: pointer;
+  padding: 0 12px;
 }
 
 .btn-ref:not(:disabled) {
@@ -600,19 +618,15 @@ a {
 .subtle-save-link {
   background: none;
   border: none;
-  padding: 4px;
-  color: var(--dim);
+  padding: 10px;
+  color: var(--muted);
   font-family: inherit;
-  font-size: 0.78rem;
+  font-size: 0.92rem;
   cursor: pointer;
   align-self: center;
 }
 
-.subtle-save-link:hover {
-  color: var(--muted);
-}
-
-/* KI-Barista Result Card */
+/* KI-Barista Ergebnis */
 .ai-card {
   border-color: rgba(229, 147, 58, 0.45);
   background: linear-gradient(180deg, rgba(229, 147, 58, 0.1), var(--card) 65%);
@@ -622,11 +636,12 @@ a {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
+  gap: 10px;
+  margin-bottom: 8px;
 }
 
 .ai-label {
-  font-size: 0.74rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: var(--accent);
   text-transform: uppercase;
@@ -634,19 +649,20 @@ a {
 }
 
 .ai-state {
-  font-size: 0.74rem;
+  font-size: 0.84rem;
   color: var(--muted);
 }
 
 .ai-command {
-  margin: 0 0 6px;
-  font-size: 1.06rem;
+  margin: 0 0 8px;
+  font-size: 1.25rem;
   font-weight: 700;
+  line-height: 1.3;
 }
 
 .ai-reason {
-  margin: 0 0 12px;
-  font-size: 0.85rem;
+  margin: 0 0 14px;
+  font-size: 0.96rem;
   color: var(--muted);
 }
 
@@ -654,12 +670,13 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
-  padding-top: 10px;
+  padding-top: 12px;
   border-top: 1px solid var(--line);
 }
 
-/* History Accordion */
+/* Verlauf */
 .history-box {
   background: var(--card);
   border: 1px solid var(--line);
@@ -671,8 +688,9 @@ a {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 16px;
-  font-size: 0.86rem;
+  min-height: 56px;
+  padding: 14px 18px;
+  font-size: 1rem;
   font-weight: 500;
   color: var(--muted);
   cursor: pointer;
@@ -686,40 +704,40 @@ a {
   padding: 0 14px 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .history-item {
   background: var(--control);
   border-radius: var(--radius-sm);
-  padding: 11px 12px;
-  font-size: 0.82rem;
+  padding: 13px 14px;
+  font-size: 0.94rem;
 }
 
-/* Tab 2: Beans & Calibration */
+/* Bohnen & Kalibrierung */
 .calib-box {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .calib-status-wrap {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.9rem;
+  gap: 10px;
+  font-size: 1.02rem;
 }
 
 .calib-sub {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.92rem;
   color: var(--muted);
 }
 
 .progress-bar {
-  height: 4px;
+  height: 6px;
   background: var(--control);
-  border-radius: 4px;
+  border-radius: 6px;
   overflow: hidden;
 }
 
@@ -735,7 +753,7 @@ a {
   gap: 10px;
 }
 
-@media (max-width: 380px) {
+@media (max-width: 400px) {
   .two-buttons {
     grid-template-columns: 1fr;
   }
@@ -744,16 +762,16 @@ a {
 .form-stack {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
 .field-pair {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 12px;
 }
 
-@media (max-width: 390px) {
+@media (max-width: 420px) {
   .field-pair {
     grid-template-columns: 1fr;
   }
@@ -762,28 +780,28 @@ a {
 .input-block {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
 }
 
 .input-block label {
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   color: var(--muted);
 }
 
 .text-input {
   width: 100%;
-  min-height: 42px;
+  min-height: 52px;
   background: var(--control);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   color: var(--text);
-  padding: 9px 12px;
+  padding: 12px 14px;
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: 1rem;
 }
 
 .text-area {
-  min-height: 96px;
+  min-height: 120px;
   resize: vertical;
   line-height: 1.5;
 }
@@ -791,8 +809,8 @@ a {
 .tags-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 2px;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 .chip-tag,
@@ -801,8 +819,9 @@ a {
   border: 1px solid var(--line);
   color: var(--muted);
   border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 0.74rem;
+  padding: 7px 13px;
+  font-family: inherit;
+  font-size: 0.88rem;
 }
 
 .chip-tag {
@@ -812,16 +831,16 @@ a {
 .scan-banner {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   background: var(--control);
-  padding: 9px 11px;
+  padding: 10px 12px;
   border-radius: var(--radius-sm);
 }
 
 .scan-banner img {
-  width: 42px;
-  height: 42px;
-  border-radius: 8px;
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
   object-fit: cover;
 }
 
@@ -829,28 +848,28 @@ a {
   flex: 1;
   display: flex;
   flex-direction: column;
-  font-size: 0.8rem;
+  font-size: 0.92rem;
 }
 
 .scan-banner-text span {
-  font-size: 0.74rem;
+  font-size: 0.84rem;
   color: var(--muted);
 }
 
-/* 1-10 Scale */
+/* Bewertungsskala 1–10 */
 .scale-10 {
   display: grid;
   grid-template-columns: repeat(10, 1fr);
-  gap: 4px;
+  gap: 5px;
 }
 
 .rate-btn {
-  height: 34px;
-  border-radius: 7px;
+  height: 46px;
+  border-radius: 9px;
   border: 1px solid var(--line);
   background: var(--control);
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.98rem;
   cursor: pointer;
   padding: 0;
 }
@@ -862,44 +881,46 @@ a {
   font-weight: 700;
 }
 
-/* Bean Cards */
+/* Bohnen-Karten */
 .cards-stack {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .bean-card-head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  min-width: 0;
 }
 
 .bean-thumb {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
+  width: 54px;
+  height: 54px;
+  border-radius: 10px;
   object-fit: cover;
+  flex-shrink: 0;
 }
 
 .bean-title {
   margin: 0;
-  font-size: 0.96rem;
+  font-size: 1.1rem;
   font-weight: 600;
 }
 
 .bean-sub {
-  margin: 2px 0 0;
-  font-size: 0.77rem;
+  margin: 3px 0 0;
+  font-size: 0.88rem;
   color: var(--muted);
 }
 
 .bean-recipe-box {
-  margin-top: 10px;
+  margin-top: 12px;
   background: var(--control);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  font-size: 0.8rem;
+  padding: 12px 14px;
+  font-size: 0.94rem;
   color: var(--muted);
   white-space: pre-wrap;
 }
@@ -908,24 +929,26 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 6px 12px;
   margin-top: 14px;
-  padding-top: 12px;
+  padding-top: 8px;
   border-top: 1px solid var(--line);
 }
 
 .bean-sub-actions {
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 4px 18px;
 }
 
 .muted-btn {
   background: none;
   border: none;
-  padding: 0;
-  color: var(--dim);
+  padding: 10px 0;
+  color: var(--muted);
   font-family: inherit;
-  font-size: 0.78rem;
+  font-size: 0.92rem;
   cursor: pointer;
 }
 
@@ -936,29 +959,35 @@ a {
 .checkbox-line {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.84rem;
+  gap: 10px;
+  font-size: 0.96rem;
   color: var(--muted);
+}
+
+.checkbox-line input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--accent);
 }
 
 .empty-state {
   text-align: center;
-  padding: 24px 14px;
+  padding: 28px 16px;
   color: var(--dim);
-  font-size: 0.84rem;
+  font-size: 0.96rem;
 }
 
-/* Bottom Tab Bar */
+/* Untere Navigation */
 .tab-bar {
   position: fixed;
   bottom: 0;
   left: 50%;
   transform: translateX(-50%);
   width: 100%;
-  max-width: 480px;
+  max-width: 520px;
   height: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
   padding-bottom: env(safe-area-inset-bottom, 0px);
-  background: rgba(14, 14, 18, 0.94);
+  background: rgba(14, 14, 18, 0.95);
   backdrop-filter: blur(14px);
   border-top: 1px solid var(--line);
   display: grid;
@@ -972,7 +1001,7 @@ a {
   border: none;
   color: var(--dim);
   font-family: inherit;
-  font-size: 0.86rem;
+  font-size: 1.02rem;
   font-weight: 500;
   cursor: pointer;
 }
@@ -986,33 +1015,34 @@ a {
   content: '';
   position: absolute;
   top: 0;
-  left: 30%;
-  right: 30%;
-  height: 2px;
+  left: 28%;
+  right: 28%;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
   background: var(--accent);
 }
 
 .tab-dot {
   display: inline-block;
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--yellow);
-  margin-left: 4px;
+  margin-left: 5px;
   vertical-align: middle;
 }
 
 /* Toasts */
 .toast-stack {
   position: fixed;
-  top: calc(64px + env(safe-area-inset-top, 0px));
+  top: calc(76px + env(safe-area-inset-top, 0px));
   left: 50%;
   transform: translateX(-50%);
   width: calc(100% - 32px);
-  max-width: 440px;
+  max-width: 480px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   z-index: 80;
   pointer-events: none;
 }
@@ -1021,9 +1051,9 @@ a {
   background: var(--control);
   border: 1px solid var(--line);
   color: var(--text);
-  padding: 11px 14px;
-  border-radius: 11px;
-  font-size: 0.84rem;
+  padding: 14px 16px;
+  border-radius: 13px;
+  font-size: 0.96rem;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
 }
 
