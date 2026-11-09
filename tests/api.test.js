@@ -271,4 +271,19 @@ test('Phase 2: Exaktes Vorausfüllen des vorherigen Bezugs, KI-Barista & perfekt
   assert.equal(goodRef.data.bean.ref_time_s, 28.5);
   assert.equal(goodRef.data.bean.ref_temp_c, 93.5);
   assert.equal(goodRef.data.bean.ref_grind, '14.25');
+
+  // Backup Export & Import testen
+  const backupRes = await reqJson(srv.baseUrl, '/api/backup');
+  assert.equal(backupRes.status, 200);
+  assert.equal(backupRes.data.data.beans.length, 1);
+  assert.equal(backupRes.data.data.shots.length, 2);
+
+  await reqJson(srv.baseUrl, `/api/beans/${beanId}`, { method: 'DELETE' });
+  const restoreRes = await reqJson(srv.baseUrl, '/api/backup', {
+    method: 'POST',
+    body: backupRes.data,
+  });
+  assert.equal(restoreRes.status, 200);
+  assert.equal(restoreRes.data.beans.length, 1);
+  assert.equal(restoreRes.data.beans[0].ref_in_g, 20.1);
 });

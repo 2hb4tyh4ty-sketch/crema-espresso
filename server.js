@@ -60,6 +60,29 @@ function createApp(options = {}) {
     });
   });
 
+  // --- Backup Export & Import ---
+  app.get('/api/backup', (_req, res) => {
+    res.json(repo.exportBackup());
+  });
+
+  app.post('/api/backup', (req, res, next) => {
+    try {
+      repo.importBackup(req.body || {});
+      res.json({
+        ok: true,
+        equipment: repo.listEquipment(),
+        activeEquipment: repo.getActiveEquipment(),
+        beans: repo.listBeans(),
+        calibration: repo.getCalibrationStatus(),
+        latestShot: repo.getLatestShot(),
+        recentShots: repo.listShots({ limit: 25 }),
+        aiStatus: buildAiStatus(),
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // --- AI Settings ---
   app.get('/api/settings/ai-status', (_req, res) => {
     res.json(buildAiStatus());

@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="./styles.css?v=3" />
+  <link rel="stylesheet" href="./styles.css?v=4" />
 </head>
 <body>
   <div class="app-shell">
@@ -457,6 +457,27 @@
 
           <div class="card list-rows" id="equipment-combined-list"></div>
         </div>
+
+        <!-- 3. Datensicherung (Backup Export & Import) -->
+        <div class="step-group">
+          <div class="step-header">
+            <span class="step-title">Datensicherung (Backup)</span>
+          </div>
+          <div class="card form-stack">
+            <p class="muted-sm">
+              Sichere alle gespeicherten Bohnen, Bewertungen, Bezüge und Geräte als JSON-Datei oder stelle ein Backup wieder her.
+            </p>
+            <div class="two-buttons">
+              <button type="button" class="btn-secondary" id="btn-export-backup">
+                ⬇ Backup speichern
+              </button>
+              <label class="btn-secondary" for="input-import-backup">
+                ⬆ Backup laden
+                <input type="file" id="input-import-backup" accept="application/json,.json" hidden />
+              </label>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
 
@@ -477,7 +498,7 @@
 
   <div id="toast-container" class="toast-stack" aria-live="polite"></div>
 
-  <script src="./standalone-engine.js?v=3" defer></script>
-  <script src="./app.js?v=3" defer></script>
+  <script src="./standalone-engine.js?v=4" defer></script>
+  <script src="./app.js?v=4" defer></script>
 </body>
 </html>

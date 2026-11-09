@@ -2,11 +2,13 @@ const { GoogleGenAI, Type } = require('@google/genai');
 
 const DEFAULT_MODEL = 'gemini-3.8-flash';
 const FALLBACK_MODELS = [
-  'gemini-3.8-flash',
+  'gemini-3.5-flash-lite',
   'gemini-3-flash-preview',
   'gemini-3.6-flash',
-  'gemini-3.5-flash-lite',
+  'gemini-3.8-flash',
 ];
+
+let lastWorkingModel = null;
 
 function resolveAiConfig(repo) {
   const dbKey = repo.getSetting('gemini_api_key');
@@ -53,9 +55,14 @@ function isRetryableModelError(err) {
   const status = Number(err?.status || err?.code || 0);
   const msg = String(err?.message || '');
   return (
+    err?.name === 'AbortError' ||
     status === 503 ||
     status === 429 ||
     status === 404 ||
+    status === 500 ||
+    status === 504 ||
+    msg.includes('TIMEOUT') ||
+    msg.includes('AbortError') ||
     msg.includes('"code":503') ||
     msg.includes('"code":429') ||
     msg.includes('"code":404') ||
@@ -72,7 +79,7 @@ function formatCleanAiError(err) {
     clean.status = 400;
     return clean;
   }
-  if (msg.includes('high demand') || msg.includes('UNAVAILABLE')) {
+  if (msg.includes('high demand') || msg.includes('UNAVAILABLE') || msg.includes('TIMEOUT')) {
     const clean = new Error('Die Gemini-Server sind momentan stark ausgelastet. Bitte kurz erneut versuchen.');
     clean.status = 503;
     return clean;
@@ -80,25 +87,54 @@ function formatCleanAiError(err) {
   return err;
 }
 
-async function generateWithFailover(ai, preferredModel, params) {
-  const candidates = [
-    preferredModel || DEFAULT_MODEL,
-    ...FALLBACK_MODELS.filter((m) => m !== (preferredModel || DEFAULT_MODEL)),
-  ];
+function buildCandidateChain(preferredModel) {
+  const ordered = [];
+  const add = (m) => {
+    if (m && !ordered.includes(m)) ordered.push(m);
+  };
+  if (lastWorkingModel) {
+    add(lastWorkingModel);
+  }
+  if (!preferredModel || preferredModel === 'gemini-3.8-flash') {
+    FALLBACK_MODELS.forEach(add);
+  } else {
+    add(preferredModel);
+    FALLBACK_MODELS.forEach(add);
+  }
+  return ordered;
+}
+
+async function generateWithFailover(ai, preferredModel, params, timeoutMs = 8000) {
+  const candidates = buildCandidateChain(preferredModel);
 
   let lastErr = null;
   for (const candidateModel of candidates) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
+      const mergedConfig = { ...(params.config || {}), abortSignal: controller.signal };
+      if (candidateModel === 'gemini-3-flash-preview') {
+        mergedConfig.thinkingConfig = { thinkingLevel: 'minimal' };
+      } else if (candidateModel === 'gemini-3.6-flash') {
+        mergedConfig.thinkingConfig = { thinkingLevel: 'low' };
+      }
       const response = await ai.models.generateContent({
         ...params,
         model: candidateModel,
+        config: mergedConfig,
       });
+      lastWorkingModel = candidateModel;
       return { response, usedModel: candidateModel };
     } catch (err) {
       lastErr = err;
+      if (lastWorkingModel === candidateModel) {
+        lastWorkingModel = null;
+      }
       if (!isRetryableModelError(err)) {
         throw formatCleanAiError(err);
       }
+    } finally {
+      clearTimeout(timer);
     }
   }
   throw formatCleanAiError(lastErr);
@@ -197,7 +233,7 @@ Extrahiere alle erkennbaren Informationen in die JSON-Felder:
         ],
       },
     },
-  });
+  }, 15000);
 
   const parsed = JSON.parse(response.text || '{}');
   return { ...parsed, usedModel };
@@ -256,7 +292,7 @@ Formuliere ein kurzes, übersichtliches Startrezept für das 18g Sieb:
         required: ['recipe_tips', 'recommended_temp_c', 'recommended_ratio', 'recommended_time_s'],
       },
     },
-  });
+  }, 15000);
 
   const parsed = JSON.parse(response.text || '{}');
   return { ...parsed, usedModel };
@@ -353,7 +389,7 @@ Wichtige Barista-Regeln für deine Antwort:
         required: ['command', 'extraction_state', 'diagnosis', 'suggested_params'],
       },
     },
-  });
+  }, 15000);
 
   const parsed = JSON.parse(response.text || '{}');
   return { ...parsed, usedModel };

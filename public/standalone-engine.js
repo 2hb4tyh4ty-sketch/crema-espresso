@@ -1,17 +1,19 @@
 /**
  * Standalone 24/7 Engine für GitHub Pages (ohne laufenden PC/Server).
  * Speichert Geräte, Bohnen, Bewertungen und Bezüge dauerhaft im Browser (localStorage)
- * und kommuniziert direkt per HTTPS mit der Google Gemini API (inkl. 3.8-Flash Auto-Failover).
+ * und kommuniziert direkt per HTTPS mit der Google Gemini API (inkl. Schnell-Failover & Timeout-Schutz).
  */
 (() => {
   const STORAGE_KEY = 'crema_app_db_v1';
   const DEFAULT_MODEL = 'gemini-3.8-flash';
-  const FALLBACK_MODELS = [
-    'gemini-3.8-flash',
+  const LIVE_FAST_MODELS = [
+    'gemini-3.5-flash-lite',
     'gemini-3-flash-preview',
     'gemini-3.6-flash',
-    'gemini-3.5-flash-lite',
+    'gemini-3.8-flash',
   ];
+
+  let lastWorkingModel = null;
 
   // One-Tap Hash-Import (#setupKey=...) für mühelose Einrichtung auf dem Smartphone
   try {
@@ -62,6 +64,19 @@
     };
   }
 
+  function recomputeNextIds(store) {
+    const maxId = (arr) =>
+      Array.isArray(arr) && arr.length > 0
+        ? arr.reduce((m, item) => Math.max(m, Number(item?.id) || 0), 0)
+        : 0;
+    store.nextIds = {
+      equipment: Math.max(Number(store.nextIds?.equipment) || 1, maxId(store.equipment) + 1),
+      beans: Math.max(Number(store.nextIds?.beans) || 1, maxId(store.beans) + 1),
+      ratings: Math.max(Number(store.nextIds?.ratings) || 1, maxId(store.bean_ratings) + 1),
+      shots: Math.max(Number(store.nextIds?.shots) || 1, maxId(store.shots) + 1),
+    };
+  }
+
   function loadStore() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -74,12 +89,16 @@
       if (!parsed.equipment || parsed.equipment.length === 0) {
         parsed.equipment = createInitialStore().equipment;
       }
+      if (!Array.isArray(parsed.beans)) parsed.beans = [];
+      if (!Array.isArray(parsed.bean_ratings)) parsed.bean_ratings = [];
+      if (!Array.isArray(parsed.shots)) parsed.shots = [];
       if (!parsed.settings) {
         parsed.settings = { gemini_api_key: '', gemini_model: DEFAULT_MODEL };
       }
       if (!parsed.settings.gemini_model || parsed.settings.gemini_model.startsWith('gemini-2.')) {
         parsed.settings.gemini_model = DEFAULT_MODEL;
       }
+      recomputeNextIds(parsed);
       return parsed;
     } catch {
       return createInitialStore();
@@ -134,7 +153,10 @@
     const remaining = Math.max(0, minRequired - totalRatings);
 
     const noteWeights = new Map();
-    for (const r of store.bean_ratings) {
+    const dislikedNotes = new Set();
+    const ratedBeansDesc = [...store.bean_ratings].sort((a, b) => b.id - a.id);
+
+    for (const r of ratedBeansDesc) {
       const bean = store.beans.find((b) => b.id === r.bean_id);
       if (!bean) continue;
       const notes = String(bean.flavor_notes || '')
@@ -147,6 +169,9 @@
         prev.totalScore += r.score;
         prev.count += 1;
         noteWeights.set(key, prev);
+        if (r.score <= 4) {
+          dislikedNotes.add(note);
+        }
       }
     }
 
@@ -157,8 +182,17 @@
         count: x.count,
       }))
       .filter((x) => x.avgScore >= 6.5)
-      .sort((a, b) => b.avgScore - a.avgScore)
+      .sort((a, b) => b.avgScore - a.avgScore || b.count - a.count)
       .slice(0, 5);
+
+    const topBeans = ratedBeansDesc
+      .filter((r) => r.score >= 7)
+      .slice(0, 3)
+      .map((r) => {
+        const b = store.beans.find((x) => x.id === r.bean_id);
+        return b ? `${b.roaster} ${b.name} (${r.score}/10)` : null;
+      })
+      .filter(Boolean);
 
     return {
       totalRatings,
@@ -167,11 +201,17 @@
       isCalibrating,
       statusText: isCalibrating ? 'Kalibrierung läuft...' : 'Präferenz-Profil aktiv',
       favoriteNotes,
+      dislikedNotes: Array.from(dislikedNotes).slice(0, 4),
+      topBeans,
       summaryForAi: isCalibrating
         ? 'Nutzerpräferenzen befinden sich noch in der Kalibrierung (< 3 Bohnen-Bewertungen).'
         : `Kalibriertes Geschmacksprofil (${totalRatings} Bewertungen): Bevorzugte Noten: ${
             favoriteNotes.map((n) => `${n.label} (Ø ${n.avgScore}/10)`).join(', ') || 'ausgewogen'
-          }.`,
+          }. Top-Bohnen: ${topBeans.join(', ') || 'k.A.'}.${
+            dislikedNotes.size > 0
+              ? ` Weniger bevorzugt: ${Array.from(dislikedNotes).join(', ')}.`
+              : ''
+          }`,
     };
   }
 
@@ -184,13 +224,17 @@
       ...shot,
       bean_roaster: bean?.roaster || null,
       bean_name: bean?.name || null,
+      bean_flavor_notes: bean?.flavor_notes || null,
       machine_name: machine?.name || null,
       grinder_name: grinder?.name || null,
     };
   }
 
-  function listShots(store, limit = 25) {
-    return [...store.shots]
+  function listShots(store, { beanId = null, limit = 25 } = {}) {
+    const filtered = beanId
+      ? store.shots.filter((s) => s.bean_id === Number(beanId))
+      : store.shots;
+    return [...filtered]
       .sort((a, b) => b.id - a.id)
       .slice(0, limit)
       .map((s) => enrichShot(store, s));
@@ -209,8 +253,32 @@
     };
   }
 
-  // --- Direct Browser HTTPS Gemini Call with 3.8-Flash Failover ---
-  async function callGeminiDirect(store, { contents, responseSchema, overrideKey, overrideModel }) {
+  function buildCandidateChain(preferredModel) {
+    const ordered = [];
+    const add = (m) => {
+      if (m && !ordered.includes(m)) ordered.push(m);
+    };
+
+    if (lastWorkingModel) {
+      add(lastWorkingModel);
+    }
+
+    // Wenn der Standardwert 'gemini-3.8-flash' aktiv ist, zuerst die schnellen
+    // antwortenden Gemini-3-Flash-Endpunkte nutzen, damit kein Timeout entsteht.
+    if (!preferredModel || preferredModel === 'gemini-3.8-flash') {
+      LIVE_FAST_MODELS.forEach(add);
+    } else {
+      add(preferredModel);
+      LIVE_FAST_MODELS.forEach(add);
+    }
+    return ordered;
+  }
+
+  // --- Direct Browser HTTPS Gemini Call with Fast Failover & Timeout ---
+  async function callGeminiDirect(
+    store,
+    { contents, responseSchema, overrideKey, overrideModel, timeoutMs = 7000 }
+  ) {
     const apiKey = (overrideKey || store.settings.gemini_api_key || '').trim();
     if (!apiKey) {
       const err = new Error(
@@ -222,13 +290,13 @@
     }
 
     const preferred = overrideModel || store.settings.gemini_model || DEFAULT_MODEL;
-    const candidates = [preferred, ...FALLBACK_MODELS.filter((m) => m !== preferred)];
+    const candidates = buildCandidateChain(preferred);
 
     let lastErr = null;
     for (const model of candidates) {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
         model
-      )}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      )}:generateContent`;
 
       const body = {
         contents: Array.isArray(contents)
@@ -236,54 +304,116 @@
           : [{ role: 'user', parts: [{ text: String(contents) }] }],
       };
 
+      const generationConfig = {};
       if (responseSchema) {
-        body.generationConfig = {
-          responseMimeType: 'application/json',
-          responseSchema,
-        };
+        generationConfig.responseMimeType = 'application/json';
+        generationConfig.responseSchema = responseSchema;
+      }
+      // Reduziert Denk-Latenz bei Gemini 3 Flash von ~8s auf ~1.5-2s
+      if (model === 'gemini-3-flash-preview') {
+        generationConfig.thinkingConfig = { thinkingLevel: 'minimal' };
+      } else if (model === 'gemini-3.6-flash') {
+        generationConfig.thinkingConfig = { thinkingLevel: 'low' };
+      }
+      if (Object.keys(generationConfig).length > 0) {
+        body.generationConfig = generationConfig;
       }
 
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      const canAbort = typeof AbortController !== 'undefined';
+      const controller = canAbort ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
 
-      if (res.ok) {
-        const json = await res.json();
-        const text = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        return { text, usedModel: model };
-      }
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey,
+          },
+          body: JSON.stringify(body),
+          ...(controller ? { signal: controller.signal } : {}),
+        });
 
-      const errData = await res.json().catch(() => ({}));
-      const errMsg = errData?.error?.message || `HTTP ${res.status}`;
-      lastErr = new Error(errMsg);
-      lastErr.status = res.status;
+        if (res.ok) {
+          const json = await res.json();
+          const text = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          lastWorkingModel = model;
+          return { text, usedModel: model };
+        }
 
-      if (res.status === 400 && errMsg.toLowerCase().includes('api key')) {
-        const invalid = new Error('Der eingegebene Gemini API-Key ist ungültig.');
-        invalid.status = 400;
-        throw invalid;
-      }
+        const errData = await res.json().catch(() => ({}));
+        const errMsg = errData?.error?.message || `HTTP ${res.status}`;
+        lastErr = new Error(errMsg);
+        lastErr.status = res.status;
 
-      if (![503, 429, 404].includes(res.status)) {
-        throw lastErr;
+        if (
+          (res.status === 400 || res.status === 403) &&
+          (errMsg.toLowerCase().includes('api key') || errMsg.includes('API_KEY_INVALID'))
+        ) {
+          const invalid = new Error('Der eingegebene Gemini API-Key ist ungültig.');
+          invalid.status = 400;
+          throw invalid;
+        }
+
+        if (![503, 429, 404, 500, 504].includes(res.status)) {
+          throw lastErr;
+        }
+      } catch (fetchErr) {
+        if (fetchErr?.status === 400 && fetchErr.message.includes('API-Key')) {
+          throw fetchErr;
+        }
+        const isTimeout = fetchErr?.name === 'AbortError';
+        lastErr = isTimeout
+          ? new Error(`Zeitüberschreitung bei Modell ${model}`)
+          : fetchErr;
+        if (lastWorkingModel === model) {
+          lastWorkingModel = null;
+        }
+        // Bei Timeout oder Netzwerkfehler zum nächsten Modell im Failover wechseln
+      } finally {
+        if (timer) clearTimeout(timer);
       }
     }
 
     throw new Error(
-      lastErr?.message || 'Die Gemini-Server sind momentan ausgelastet. Bitte kurz erneut versuchen.'
+      lastErr?.message ||
+        'Die Gemini-Server sind momentan ausgelastet. Bitte kurz erneut versuchen.'
     );
   }
 
   function describeSlider(val) {
     const v = Number(val || 0);
     const pct = Math.round(Math.abs(v) * 100);
-    if (v <= -0.5) return `Deutlich sauer (${v.toFixed(2)}, ${pct}% Richtung Sauer)`;
-    if (v < -0.12) return `Leicht sauer (${v.toFixed(2)}, ${pct}% Richtung Sauer)`;
-    if (v <= 0.12) return `Neutral / Ausgewogen (${v.toFixed(2)}, Mitte)`;
-    if (v < 0.5) return `Leicht bitter (${v.toFixed(2)}, ${pct}% Richtung Bitter)`;
-    return `Deutlich bitter (${v.toFixed(2)}, ${pct}% Richtung Bitter)`;
+    if (v <= -0.6) return `Stark sauer (${v.toFixed(2)}, ${pct}% links Richtung Sauer)`;
+    if (v <= -0.25) return `Deutlich sauer (${v.toFixed(2)}, ${pct}% Richtung Sauer)`;
+    if (v < -0.1) return `Leicht sauer / spritzig (${v.toFixed(2)}, ${pct}% Richtung Sauer)`;
+    if (v <= 0.1) return `Neutral / Ausgewogen (${v.toFixed(2)}, Mitte)`;
+    if (v < 0.25) return `Leicht bitter / kräftig (${v.toFixed(2)}, ${pct}% Richtung Bitter)`;
+    if (v < 0.6) return `Deutlich bitter (${v.toFixed(2)}, ${pct}% Richtung Bitter)`;
+    return `Stark bitter / adstringierend (${v.toFixed(2)}, ${pct}% rechts Richtung Bitter)`;
+  }
+
+  function computeRoastAgeText(roastDate) {
+    if (!roastDate) return 'Unbekannt';
+    const parsed = new Date(`${roastDate}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return roastDate;
+    const now = new Date();
+    const diffDays = Math.floor((now - parsed) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) return `Röstdatum in der Zukunft (${roastDate})`;
+    return `${diffDays} Tage nach Röstung (geröstet am ${roastDate})`;
+  }
+
+  function buildBootstrapPayload(store) {
+    const shots = listShots(store, { limit: 25 });
+    return {
+      equipment: store.equipment,
+      activeEquipment: getActiveEquipment(store),
+      beans: listBeans(store),
+      calibration: getCalibrationStatus(store),
+      latestShot: shots[0] || null,
+      recentShots: shots,
+      aiStatus: buildAiStatus(store),
+    };
   }
 
   // --- Route Handler for Standalone Mode ---
@@ -296,15 +426,52 @@
     const store = loadStore();
 
     if (url === '/api/bootstrap' && method === 'GET') {
-      const shots = listShots(store, 25);
+      return buildBootstrapPayload(store);
+    }
+
+    // Backup Export & Import (Punkt 1)
+    if (url === '/api/backup' && method === 'GET') {
       return {
-        equipment: store.equipment,
-        activeEquipment: getActiveEquipment(store),
-        beans: listBeans(store),
-        calibration: getCalibrationStatus(store),
-        latestShot: shots[0] || null,
-        recentShots: shots,
-        aiStatus: buildAiStatus(store),
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        data: {
+          equipment: store.equipment,
+          beans: store.beans,
+          bean_ratings: store.bean_ratings,
+          shots: store.shots,
+        },
+      };
+    }
+
+    if (url === '/api/backup' && method === 'POST') {
+      const incoming = body.data && typeof body.data === 'object' ? body.data : body;
+      if (
+        !incoming ||
+        (!Array.isArray(incoming.beans) &&
+          !Array.isArray(incoming.shots) &&
+          !Array.isArray(incoming.equipment))
+      ) {
+        throw new Error('Ungültige Backup-Datei. Keine Bohnen-, Bezugs- oder Gerätedaten gefunden.');
+      }
+
+      if (Array.isArray(incoming.equipment) && incoming.equipment.length > 0) {
+        store.equipment = incoming.equipment;
+      }
+      if (Array.isArray(incoming.beans)) {
+        store.beans = incoming.beans;
+      }
+      if (Array.isArray(incoming.bean_ratings)) {
+        store.bean_ratings = incoming.bean_ratings;
+      }
+      if (Array.isArray(incoming.shots)) {
+        store.shots = incoming.shots;
+      }
+
+      recomputeNextIds(store);
+      saveStore(store);
+      return {
+        ok: true,
+        ...buildBootstrapPayload(store),
       };
     }
 
@@ -324,6 +491,7 @@
         contents: 'Antworte nur mit dem Wort: BEREIT',
         overrideKey: body.apiKey,
         overrideModel: body.model,
+        timeoutMs: 6000,
       });
       return { ok: true, model: usedModel, reply: text.trim() };
     }
@@ -394,7 +562,12 @@
 
     if (equipIdMatch && method === 'DELETE') {
       const id = Number(equipIdMatch[1]);
+      const target = store.equipment.find((e) => e.id === id);
       store.equipment = store.equipment.filter((e) => e.id !== id);
+      if (target && target.is_default === 1) {
+        const fallback = store.equipment.find((e) => e.type === target.type);
+        if (fallback) fallback.is_default = 1;
+      }
       saveStore(store);
       return { ok: true, equipment: store.equipment, activeEquipment: getActiveEquipment(store) };
     }
@@ -412,6 +585,8 @@
         roast_date: String(body.roast_date || ''),
         expiry_date: String(body.expiry_date || ''),
         flavor_notes: String(body.flavor_notes || '').trim(),
+        roast_level: String(body.roast_level || '').trim(),
+        origin: String(body.origin || '').trim(),
         ai_recipe_tips: String(body.ai_recipe_tips || '').trim(),
         rating: body.rating ? Number(body.rating) : null,
         image_data: String(body.image_data || ''),
@@ -476,11 +651,19 @@
       const beanId = Number(beanIdMatch[1]);
       const bean = store.beans.find((b) => b.id === beanId);
       if (bean) {
-        ['roaster', 'name', 'roast_date', 'expiry_date', 'flavor_notes', 'ai_recipe_tips', 'image_data'].forEach(
-          (k) => {
-            if (body[k] !== undefined) bean[k] = String(body[k]);
-          }
-        );
+        [
+          'roaster',
+          'name',
+          'roast_date',
+          'expiry_date',
+          'flavor_notes',
+          'roast_level',
+          'origin',
+          'ai_recipe_tips',
+          'image_data',
+        ].forEach((k) => {
+          if (body[k] !== undefined) bean[k] = String(body[k]);
+        });
         saveStore(store);
       }
       return {
@@ -516,11 +699,12 @@
         taste_slider: Number(body.taste_slider ?? 0),
         ai_diagnosis: '',
         ai_command: '',
+        ai_suggested: null,
         created_at: new Date().toISOString(),
       };
       store.shots.push(shot);
       saveStore(store);
-      const recentShots = listShots(store, 25);
+      const recentShots = listShots(store, { limit: 25 });
       return {
         shot: enrichShot(store, shot),
         latestShot: recentShots[0] || null,
@@ -534,7 +718,7 @@
       const id = Number(shotDelMatch[1]);
       store.shots = store.shots.filter((s) => s.id !== id);
       saveStore(store);
-      const recentShots = listShots(store, 25);
+      const recentShots = listShots(store, { limit: 25 });
       return {
         ok: true,
         latestShot: recentShots[0] || null,
@@ -543,7 +727,7 @@
       };
     }
 
-    // AI: Vision Scan
+    // AI: Vision Scan (mit erweitertem Schema analog zum Backend)
     if (url === '/api/ai/scan-label' && method === 'POST') {
       const raw = String(body.imageBase64 || '');
       const match = raw.match(/^data:([^;]+);base64,(.+)$/);
@@ -552,12 +736,22 @@
       const todayIso = new Date().toISOString().slice(0, 10);
 
       const { text } = await callGeminiDirect(store, {
+        timeoutMs: 15000,
         contents: [
           {
             role: 'user',
             parts: [
               {
-                text: `Analysiere dieses Kaffee-Etikett (Heute: ${todayIso}). Extrahiere JSON: roaster, name, roast_date (YYYY-MM-DD oder ""), expiry_date (YYYY-MM-DD oder ""), flavor_notes (auf Deutsch, kommagetrennt).`,
+                text: `Analysiere dieses Foto eines Kaffee-Etiketts / einer Kaffeeverpackung sehr sorgfältig (Heutiges Datum: ${todayIso}).
+Extrahiere alle erkennbaren Informationen in die JSON-Felder:
+- roaster: Name der Rösterei / Marke (z. B. "19grams", "The Barn", "Elbgold").
+- name: Name des Kaffees / Espresso-Blends / Single Origins.
+- roast_date: Röstdatum im Format YYYY-MM-DD, falls angegeben (sonst "").
+- expiry_date: Mindesthaltbarkeitsdatum (MHD / Best Before) im Format YYYY-MM-DD, falls angegeben (sonst "").
+- flavor_notes: Geschmacksnoten auf Deutsch als kommagetrennte Liste (z. B. "Schokoladig, Nussig, Karamell").
+- roast_level: Röstgrad ("Hell", "Mittel" oder "Dunkel"), falls erkennbar, sonst "".
+- origin: Herkunftsland / Region, falls erkennbar, sonst "".
+- summary_hint: Kurzer Hinweis auf Deutsch (1 Satz), welche Felder erkannt wurden.`,
               },
               { inlineData: { mimeType, data } },
             ],
@@ -571,34 +765,72 @@
             roast_date: { type: 'STRING' },
             expiry_date: { type: 'STRING' },
             flavor_notes: { type: 'STRING' },
+            roast_level: { type: 'STRING' },
+            origin: { type: 'STRING' },
+            summary_hint: { type: 'STRING' },
           },
-          required: ['roaster', 'name', 'roast_date', 'expiry_date', 'flavor_notes'],
+          required: [
+            'roaster',
+            'name',
+            'roast_date',
+            'expiry_date',
+            'flavor_notes',
+            'roast_level',
+            'origin',
+            'summary_hint',
+          ],
         },
       });
       return { extracted: JSON.parse(text || '{}') };
     }
 
-    // AI: Bean Base Recipe
+    // AI: Bean Base Recipe (Punkt 4: voller Kontext inkl. Röstalter in Tagen & Gerätenotizen)
     if (url === '/api/ai/bean-recipe' && method === 'POST') {
       const active = getActiveEquipment(store);
       const cal = getCalibrationStatus(store);
-      const prompt = `Erstelle ein kurzes deutsches Espresso-Grundrezept für 18g Sieb (${
-        active.machine?.name || 'Bezzera Luce S PID'
-      }, Mühle ${active.grinder?.name || 'DF54'}):
-Bohne: ${body.roaster || ''} ${body.name || ''}, Röstdatum: ${body.roast_date || 'k.A.'}, Noten: ${
-        body.flavor_notes || 'k.A.'
-      }.
-${cal.summaryForAi}
-Gib 18g In -> Ziel-Out (g), Zeit (s), PID-Temperatur (°C), DF54 Mahlgrad-Startwert und 1 kurzen Tipp an.`;
+      const machineDesc = active.machine
+        ? `${active.machine.name}${active.machine.notes ? ` (${active.machine.notes})` : ''}`
+        : 'Bezzera Luce S PID (18g Sieb)';
+      const grinderDesc = active.grinder
+        ? `${active.grinder.name}${active.grinder.notes ? ` (${active.grinder.notes})` : ''}`
+        : 'DF54';
+      const roastAge = computeRoastAgeText(body.roast_date);
+
+      const prompt = `Du bist ein erfahrener Specialty-Coffee Head-Barista. Erstelle ein präzises, praxisnahes Espresso-Grundrezept und Zubereitungstipps auf Deutsch für folgende Bohne und folgendes Equipment:
+
+Equipment des Nutzers:
+- Maschine: ${machineDesc}
+- Mühle: ${grinderDesc}
+- Siebgröße: 18g Sieb
+
+Bohnendaten:
+- Röster: ${body.roaster || 'Unbekannt'}
+- Name: ${body.name || 'Unbekannt'}
+- Röstdatum / Alter: ${roastAge}
+- Ablaufdatum (MHD): ${body.expiry_date || 'k.A.'}
+- Geschmacksnoten: ${body.flavor_notes || 'k.A.'}
+
+Nutzer-Geschmacksprofil:
+- ${cal.summaryForAi}
+
+Formuliere in "recipe_tips" ein kurzes, übersichtliches Startrezept für das 18g Sieb:
+1. Dosis & Zielmenge: 18g In -> empfohlene Gramm Out (inkl. Ratio, z. B. 1:2.0 = 36g).
+2. Ziel-Bezugszeit in Sekunden & empfohlene PID-Temperatur in °C.
+3. Mahlgrad-Orientierung an der ${active.grinder ? active.grinder.name : 'DF54'}.
+4. 1–2 knappe Tipps zu Röstalter und Geschmacksnoten.`;
 
       const { text } = await callGeminiDirect(store, {
         contents: prompt,
+        timeoutMs: 8000,
         responseSchema: {
           type: 'OBJECT',
           properties: {
             recipe_tips: { type: 'STRING' },
+            recommended_temp_c: { type: 'NUMBER' },
+            recommended_ratio: { type: 'NUMBER' },
+            recommended_time_s: { type: 'NUMBER' },
           },
-          required: ['recipe_tips'],
+          required: ['recipe_tips', 'recommended_temp_c', 'recommended_ratio', 'recommended_time_s'],
         },
       });
       const parsed = JSON.parse(text || '{}');
@@ -612,26 +844,80 @@ Gib 18g In -> Ziel-Out (g), Zeit (s), PID-Temperatur (°C), DF54 Mahlgrad-Startw
       return parsed;
     }
 
-    // AI: Barista Analysis
+    // AI: Barista Analysis (Punkt 4: voller Kontext inkl. Historie der letzten 3 Shots, Referenzrezept, Röstalter & Flussrate)
     if (url === '/api/ai/barista' && method === 'POST') {
       const active = getActiveEquipment(store);
       const cal = getCalibrationStatus(store);
-      const bean = store.beans.find((b) => b.id === Number(body.bean_id));
-      const ratio = body.in_g > 0 ? (body.out_g / body.in_g).toFixed(2) : '2.0';
+      const beanId = body.bean_id ? Number(body.bean_id) : null;
+      const bean = beanId ? store.beans.find((b) => b.id === beanId) : null;
 
-      const prompt = `Du bist ein KI-Barista (${active.machine?.name || 'Bezzera Luce S PID'} mit 18g Sieb, ${
-        active.grinder?.name || 'DF54'
-      }).
-Bohne: ${bean ? `${bean.roaster} – ${bean.name} (${bean.flavor_notes})` : 'k.A.'}
-Bezug: ${body.in_g}g In -> ${body.out_g}g Out (1:${ratio}) in ${body.time_s}s bei ${body.temp_c}°C, Mahlgrad ${
-        body.grind_setting
-      }.
-Bewertung: ${body.stars}/5 Sterne, Geschmack: ${describeSlider(body.taste_slider)}.
-${cal.summaryForAi}
-Gib genau EINEN kurzen konkreten Befehl für den nächsten Shot auf Deutsch (z.B. "Mahlgrad um 0.5 Stufen feiner stellen"), eine kurze Begründung und suggested_params aus.`;
+      const currentShotId = body.shot_id ? Number(body.shot_id) : null;
+      const priorShots = (beanId
+        ? store.shots.filter((s) => s.bean_id === beanId && s.id !== currentShotId)
+        : store.shots.filter((s) => s.id !== currentShotId)
+      )
+        .sort((a, b) => b.id - a.id)
+        .slice(0, 3);
+
+      const inG = Number(body.in_g);
+      const outG = Number(body.out_g);
+      const timeS = Number(body.time_s);
+      const tempC = Number(body.temp_c);
+      const grind = String(body.grind_setting || '').trim();
+      const stars = Number(body.stars || 3);
+      const slider = Number(body.taste_slider ?? 0);
+      const ratio = inG > 0 ? (outG / inG).toFixed(2) : '2.00';
+      const flow = timeS > 0 ? (outG / timeS).toFixed(2) : '0.00';
+
+      const historyLines = priorShots.length
+        ? priorShots
+            .map(
+              (s, idx) =>
+                `  #${idx + 1}: ${s.in_g}g In -> ${s.out_g}g Out in ${s.time_s}s @ ${s.temp_c}°C, Mahlgrad ${s.grind_setting} | ${s.stars}/5★, Slider ${s.taste_slider}`
+            )
+            .join('\n')
+        : '  Keine vorherigen Bezüge gespeichert.';
+
+      const refLine =
+        bean && bean.ref_in_g !== null && bean.ref_in_g !== undefined
+          ? `Gespeichertes perfektes Referenzrezept dieser Bohne: ${bean.ref_in_g}g In -> ${bean.ref_out_g}g Out in ${bean.ref_time_s}s @ ${bean.ref_temp_c}°C, Mahlgrad ${bean.ref_grind}.`
+          : 'Noch kein Referenzrezept für diese Bohne gespeichert.';
+
+      const prompt = `Du bist ein präziser KI-Chef-Barista für Espresso-Dial-In (18g Sieb). Analysiere den aktuellen Espresso-Bezug und gib GENAU EINEN klaren, sofort umsetzbaren Hauptbefehl für den nächsten Shot aus.
+
+Equipment:
+- Maschine: ${active.machine ? active.machine.name : 'Bezzera Luce S PID'} (18g Sieb)
+- Mühle: ${active.grinder ? active.grinder.name : 'DF54'}
+
+Bohne:
+- ${bean ? `${bean.roaster} – ${bean.name}` : 'Nicht ausgewählt'}
+- Röstalter: ${bean ? computeRoastAgeText(bean.roast_date) : 'k.A.'}
+- Geschmacksnoten: ${bean && bean.flavor_notes ? bean.flavor_notes : 'k.A.'}
+- ${refLine}
+
+Aktueller Bezug (Ist-Werte):
+- Dosis (In): ${inG} g (18g Sieb)
+- Ergebnis (Out): ${outG} g (Brew Ratio 1:${ratio})
+- Bezugszeit: ${timeS} s (Ø Flussrate ${flow} g/s)
+- PID-Temperatur: ${tempC} °C
+- Mahlgrad: ${grind}
+- Gesamtbewertung: ${stars} von 5 Sternen
+- Geschmacks-Schieberegler (Sauer -1.0 <-> Neutral 0.0 <-> Bitter +1.0): ${describeSlider(slider)}
+
+Vorherige Bezüge zum Vergleich:
+${historyLines}
+
+Nutzer-Präferenzen:
+- ${cal.summaryForAi}
+
+Wichtige Barista-Regeln für deine Antwort:
+1. "command": Gib einen kurzen, konkreten Imperativ-Befehl auf Deutsch aus (max. 14 Wörter), z. B. "Mahlgrad um 0.5 Stufen feiner stellen (auf 14.5)" oder "Ergebnis (Out) um 2g auf 38g erhöhen" oder "PID-Temperatur um 1°C auf 92°C senken". Wenn der Shot bereits perfekt ist (5 Sterne & Slider neutral um 0), lobe den Bezug und empfiehl, ihn mit "Rezept speichern" als Referenzwert zu sichern.
+2. Verändere für den nächsten Shot primär EINE Stellschraube (Mahlgrad ODER Out ODER Temperatur).
+3. "suggested_params": Liefere die exakten empfohlenen Parameter für den nächsten Bezug (in_g, out_g, time_s, temp_c, grind_setting), passend zu deinem Befehl.`;
 
       const { text } = await callGeminiDirect(store, {
         contents: prompt,
+        timeoutMs: 7500,
         responseSchema: {
           type: 'OBJECT',
           properties: {
@@ -660,12 +946,13 @@ Gib genau EINEN kurzen konkreten Befehl für den nächsten Shot auf Deutsch (z.B
         if (s) {
           s.ai_command = analysis.command || '';
           s.ai_diagnosis = analysis.diagnosis || '';
+          s.ai_suggested = analysis.suggested_params || null;
           saveStore(store);
         }
       }
       return {
         analysis,
-        recentShots: listShots(store, 25),
+        recentShots: listShots(store, { limit: 25 }),
       };
     }
 

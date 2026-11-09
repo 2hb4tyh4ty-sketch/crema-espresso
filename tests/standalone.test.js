@@ -144,4 +144,24 @@ test('GitHub Pages Standalone Engine: Geräte, Kalibrierung, 18g Shots & Referen
     },
   });
   assert.match(ai.analysis.command, /feiner/);
+
+  // Backup Export & Import (Punkt 1) ohne Verlust des API-Keys
+  const exported = await engine.request('/api/backup', { method: 'GET' });
+  assert.equal(exported.version, 1);
+  assert.equal(exported.data.beans.length, 1);
+  assert.equal(exported.data.shots.length, 1);
+
+  // Lösche Bohne testweise und stelle sie per Backup wieder her
+  await engine.request(`/api/beans/${created.bean.id}`, { method: 'DELETE' });
+  const afterDel = await engine.request('/api/beans', { method: 'GET' });
+  assert.equal(afterDel.beans.length, 0);
+
+  const restored = await engine.request('/api/backup', {
+    method: 'POST',
+    body: exported,
+  });
+  assert.equal(restored.ok, true);
+  assert.equal(restored.beans.length, 1);
+  assert.equal(restored.beans[0].name, 'Wild at Heart');
+  assert.equal(restored.aiStatus.configured, true);
 });

@@ -610,6 +610,148 @@ function createDatabase(customDbPath) {
     return res.changes > 0;
   }
 
+  // --- Backup Export & Import ---
+  function exportBackup() {
+    return {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      data: {
+        equipment: normalizeRows(db.prepare('SELECT * FROM equipment ORDER BY id ASC').all()),
+        beans: normalizeRows(db.prepare('SELECT * FROM beans ORDER BY id ASC').all()),
+        bean_ratings: normalizeRows(db.prepare('SELECT * FROM bean_ratings ORDER BY id ASC').all()),
+        shots: normalizeRows(db.prepare('SELECT * FROM shots ORDER BY id ASC').all()),
+      },
+    };
+  }
+
+  function importBackup(payload) {
+    const incoming = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
+    if (
+      !incoming ||
+      (!Array.isArray(incoming.beans) &&
+        !Array.isArray(incoming.shots) &&
+        !Array.isArray(incoming.equipment))
+    ) {
+      const err = new Error(
+        'Ungültige Backup-Datei. Keine Bohnen-, Bezugs- oder Gerätedaten gefunden.'
+      );
+      err.status = 400;
+      throw err;
+    }
+
+    db.exec('BEGIN TRANSACTION');
+    try {
+      db.exec('DELETE FROM shots; DELETE FROM bean_ratings; DELETE FROM beans;');
+      if (Array.isArray(incoming.equipment) && incoming.equipment.length > 0) {
+        db.exec('DELETE FROM equipment;');
+        const insEq = db.prepare(`
+          INSERT INTO equipment (id, type, name, brand, model, notes, is_default)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const eq of incoming.equipment) {
+          insEq.run(
+            Number(eq.id) || null,
+            eq.type === 'grinder' ? 'grinder' : 'machine',
+            String(eq.name || '').trim() || 'Gerät',
+            String(eq.brand || '').trim(),
+            String(eq.model || '').trim(),
+            String(eq.notes || '').trim(),
+            eq.is_default ? 1 : 0
+          );
+        }
+      }
+
+      if (Array.isArray(incoming.beans)) {
+        const insBean = db.prepare(`
+          INSERT INTO beans (
+            id, roaster, name, roast_date, expiry_date, flavor_notes,
+            roast_level, origin, ai_recipe_tips, rating, image_data,
+            ref_in_g, ref_out_g, ref_time_s, ref_temp_c, ref_grind
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const b of incoming.beans) {
+          insBean.run(
+            Number(b.id) || null,
+            String(b.roaster || 'Unbekannter Röster').trim(),
+            String(b.name || 'Bohne').trim(),
+            String(b.roast_date || ''),
+            String(b.expiry_date || ''),
+            String(b.flavor_notes || ''),
+            String(b.roast_level || ''),
+            String(b.origin || ''),
+            String(b.ai_recipe_tips || ''),
+            b.rating !== null && b.rating !== undefined ? Number(b.rating) : null,
+            String(b.image_data || ''),
+            b.ref_in_g !== null && b.ref_in_g !== undefined ? Number(b.ref_in_g) : null,
+            b.ref_out_g !== null && b.ref_out_g !== undefined ? Number(b.ref_out_g) : null,
+            b.ref_time_s !== null && b.ref_time_s !== undefined ? Number(b.ref_time_s) : null,
+            b.ref_temp_c !== null && b.ref_temp_c !== undefined ? Number(b.ref_temp_c) : null,
+            b.ref_grind ? String(b.ref_grind) : null
+          );
+        }
+      }
+
+      if (Array.isArray(incoming.bean_ratings)) {
+        const insRate = db.prepare(`
+          INSERT INTO bean_ratings (id, bean_id, score, comment, created_at)
+          VALUES (?, ?, ?, ?, ?)
+        `);
+        for (const r of incoming.bean_ratings) {
+          if (!r.bean_id) continue;
+          insRate.run(
+            Number(r.id) || null,
+            Number(r.bean_id),
+            Math.max(1, Math.min(10, Math.round(Number(r.score) || 5))),
+            String(r.comment || ''),
+            String(r.created_at || new Date().toISOString())
+          );
+        }
+      }
+
+      if (Array.isArray(incoming.shots)) {
+        const insShot = db.prepare(`
+          INSERT INTO shots (
+            id, bean_id, machine_id, grinder_id, basket_size,
+            in_g, out_g, time_s, temp_c, grind_setting,
+            stars, taste_slider, notes, ai_diagnosis, ai_command, ai_suggested_json, created_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const s of incoming.shots) {
+          insShot.run(
+            Number(s.id) || null,
+            s.bean_id ? Number(s.bean_id) : null,
+            s.machine_id ? Number(s.machine_id) : null,
+            s.grinder_id ? Number(s.grinder_id) : null,
+            s.basket_size ? Number(s.basket_size) : 18,
+            Number(s.in_g) || 18,
+            Number(s.out_g) || 36,
+            Number(s.time_s) || 28,
+            Number(s.temp_c) || 93,
+            String(s.grind_setting || '15'),
+            Math.max(1, Math.min(5, Math.round(Number(s.stars) || 3))),
+            Math.max(-1, Math.min(1, Number(s.taste_slider ?? 0))),
+            String(s.notes || ''),
+            String(s.ai_diagnosis || ''),
+            String(s.ai_command || ''),
+            s.ai_suggested_json
+              ? String(s.ai_suggested_json)
+              : s.ai_suggested
+              ? JSON.stringify(s.ai_suggested)
+              : '',
+            String(s.created_at || new Date().toISOString())
+          );
+        }
+      }
+
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+
   return {
     db,
     getSetting,
@@ -635,6 +777,8 @@ function createDatabase(customDbPath) {
     createShot,
     updateShotAiFeedback,
     deleteShot,
+    exportBackup,
+    importBackup,
   };
 }
 

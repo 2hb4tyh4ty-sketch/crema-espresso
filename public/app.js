@@ -1050,6 +1050,7 @@
 
       const delBtn = e.target.closest('[data-delete-shot]');
       if (delBtn) {
+        if (!window.confirm('Diesen Bezug wirklich löschen?')) return;
         try {
           const res = await api(`/api/shots/${delBtn.dataset.deleteShot}`, { method: 'DELETE' });
           state.latestShot = res.latestShot;
@@ -1058,6 +1059,7 @@
           hydrateShotMaskFromLatest(state.latestShot);
           renderShotsHistory();
           renderBeansList();
+          showToast('Bezug gelöscht.', 'info');
         } catch (err) {
           handleApiError(err);
         }
@@ -1180,6 +1182,9 @@
 
       const delBtn = e.target.closest('[data-delete-bean]');
       if (delBtn) {
+        const targetBean = state.beans.find((b) => b.id === Number(delBtn.dataset.deleteBean));
+        const label = targetBean ? `„${targetBean.name}“` : 'diese Bohne';
+        if (!window.confirm(`Möchtest du ${label} wirklich löschen?`)) return;
         try {
           const res = await api(`/api/beans/${delBtn.dataset.deleteBean}`, { method: 'DELETE' });
           state.beans = res.beans;
@@ -1187,6 +1192,7 @@
           renderCalibrationStatus();
           renderBeansList();
           renderBeanSelectDropdown();
+          showToast('Bohne gelöscht.', 'info');
         } catch (err) {
           handleApiError(err);
         }
@@ -1237,6 +1243,9 @@
 
       const delBtn = e.target.closest('[data-delete-equip]');
       if (delBtn) {
+        const targetEquip = state.equipment.find((x) => x.id === Number(delBtn.dataset.deleteEquip));
+        const label = targetEquip ? `„${targetEquip.name}“` : 'dieses Gerät';
+        if (!window.confirm(`Möchtest du ${label} wirklich entfernen?`)) return;
         try {
           const res = await api(`/api/equipment/${delBtn.dataset.deleteEquip}`, {
             method: 'DELETE',
@@ -1245,11 +1254,76 @@
           state.activeEquipment = res.activeEquipment;
           renderHeaderAndAiStatus();
           renderEquipmentLists();
+          showToast('Gerät entfernt.', 'info');
         } catch (err) {
           handleApiError(err);
         }
       }
     });
+
+    // Datensicherung (Backup Export & Import)
+    const exportBtn = $('btn-export-backup');
+    if (exportBtn) {
+      exportBtn.addEventListener('click', async () => {
+        try {
+          const backup = await api('/api/backup');
+          const blob = new Blob([JSON.stringify(backup, null, 2)], {
+            type: 'application/json',
+          });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          const dateStr = new Date().toISOString().slice(0, 10);
+          a.href = url;
+          a.download = `crema-backup-${dateStr}.json`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+          showToast('Backup-Datei gespeichert.', 'success');
+        } catch (err) {
+          handleApiError(err);
+        }
+      });
+    }
+
+    const importInput = $('input-import-backup');
+    if (importInput) {
+      importInput.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+        if (
+          !window.confirm(
+            'Backup wiederherstellen? Deine gespeicherten Bohnen, Bezüge und Geräte werden aus der Datei geladen (dein API-Key bleibt erhalten).'
+          )
+        ) {
+          return;
+        }
+        try {
+          const text = await file.text();
+          const parsed = JSON.parse(text);
+          const data = await api('/api/backup', { method: 'POST', body: parsed });
+          state.equipment = data.equipment || [];
+          state.activeEquipment = data.activeEquipment || { machine: null, grinder: null };
+          state.beans = data.beans || [];
+          state.calibration = data.calibration || state.calibration;
+          state.latestShot = data.latestShot || null;
+          state.recentShots = data.recentShots || [];
+          state.aiStatus = data.aiStatus || state.aiStatus;
+
+          renderHeaderAndAiStatus();
+          renderEquipmentLists();
+          renderCalibrationStatus();
+          renderBeansList();
+          renderBeanSelectDropdown();
+          hydrateShotMaskFromLatest(state.latestShot);
+          renderShotsHistory();
+          showToast('Backup erfolgreich wiederhergestellt!', 'success');
+        } catch (err) {
+          showToast(err.message || 'Backup-Datei konnte nicht geladen werden.', 'error');
+        }
+      });
+    }
   }
 
   async function init() {
